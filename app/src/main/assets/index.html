@@ -68,7 +68,6 @@
       color: #e2e8f0;
     }
 
-    /* Mode Switcher */
     .mode-switch {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -121,7 +120,7 @@
     }
 
     textarea {
-      min-height: 110px;
+      min-height: 105px;
       resize: vertical;
     }
 
@@ -208,7 +207,7 @@
   <div class="container">
     <header>
       <h1>استوديو استنساخ الأصوات</h1>
-      <p>محرك هجين (محلي + سحابي عبر Hugging Face)</p>
+      <p>تحويل نص إلى صوت + تحويل صوت إلى صوت (محلي وسحابي)</p>
     </header>
 
     <!-- 1. وضع التشغيل -->
@@ -229,32 +228,61 @@
       </div>
     </div>
 
-    <!-- 2. العينة الصوتية -->
+    <!-- 2. العينة الصوتية المرجعية -->
     <div class="card">
-      <span class="label">2. العينة الصوتية المرجعية (10 - 30 ثانية)</span>
+      <span class="label">2. العينة الصوتية المرجعية (الصوت المستهدف استنساخه)</span>
       <div class="audio-actions">
-        <button type="button" class="btn btn-record" id="btnRecord" onclick="toggleRecording()">
-          تسجيل صوتي
+        <button type="button" class="btn btn-record" id="btnRecordRef" onclick="toggleRecording('ref')">
+          تسجيل عينة مرجعية
         </button>
         <label class="btn" style="margin:0;">
-          رفع ملف صوتي
-          <input type="file" id="audioFileInput" accept="audio/*" class="hidden" onchange="handleFileUpload(event)" />
+          رفع عينة مرجعية
+          <input type="file" id="refFileInput" accept="audio/*" class="hidden" onchange="handleFileUpload(event, 'ref')" />
         </label>
       </div>
-      <div class="status" id="sampleStatus">لم يتم تحديد عينة صوتية بعد</div>
-      <audio id="samplePlayer" controls class="hidden"></audio>
+      <div class="status" id="refStatus">لم يتم تحديد عينة مرجعية بعد</div>
+      <audio id="refPlayer" controls class="hidden"></audio>
     </div>
 
-    <!-- 3. النص المراد نطقه -->
+    <!-- 3. نوع التحويل: صوت إلى صوت أو نص إلى صوت -->
     <div class="card">
-      <span class="label">3. النص المراد تحويله بالصوت المستنسخ</span>
-      <textarea id="ttsText" placeholder="اكتب النص هنا (يفضّل وضع التشكيل للنطق العربي الدقيق)..."></textarea>
+      <span class="label">3. نوع التوليد</span>
+      <div class="mode-switch" style="margin-bottom: 12px;">
+        <button type="button" class="mode-btn active" id="btnTaskS2S" onclick="setTask('s2s')">
+          تحويل صوت إلى صوت
+        </button>
+        <button type="button" class="mode-btn" id="btnTaskT2S" onclick="setTask('t2s')">
+          تحويل نص إلى صوت
+        </button>
+      </div>
+
+      <!-- قسم تحويل صوت إلى صوت -->
+      <div id="s2sBox">
+        <span class="label">التسجيل أو الملف الصوتي المراد تحويله</span>
+        <div class="audio-actions">
+          <button type="button" class="btn btn-record" id="btnRecordSrc" onclick="toggleRecording('src')">
+            تسجيل صوت المصدر
+          </button>
+          <label class="btn" style="margin:0;">
+            رفع صوت المصدر
+            <input type="file" id="srcFileInput" accept="audio/*" class="hidden" onchange="handleFileUpload(event, 'src')" />
+          </label>
+        </div>
+        <div class="status" id="srcStatus">لم يتم تحديد صوت مصدر للتحويل بعد</div>
+        <audio id="srcPlayer" controls class="hidden"></audio>
+      </div>
+
+      <!-- قسم تحويل نص إلى صوت -->
+      <div id="t2sBox" class="hidden">
+        <span class="label">النص المراد نطقه بالصوت المستنسخ</span>
+        <textarea id="ttsText" placeholder="اكتب النص هنا (يفضّل وضع التشكيل للنطق العربي الدقيق)..."></textarea>
+      </div>
     </div>
 
     <!-- 4. التوليد والنتيجة -->
     <div class="card">
       <button type="button" class="btn btn-primary" id="btnGenerate" onclick="generateVoice()">
-        توليد الصوت المستنسخ
+        تحويل وتوليد الصوت المستنسخ
       </button>
       <div class="status" id="genStatus">جاهز للتشغيل</div>
 
@@ -270,11 +298,14 @@
 
   <script>
     let currentMode = 'local';
-    let sampleBlob = null;
+    let currentTask = 's2s';
+    let refBlob = null;
+    let srcBlob = null;
     let outputBlob = null;
+
     let mediaRecorder = null;
     let recordedChunks = [];
-    let isRecording = false;
+    let activeRecordTarget = null;
     let extractedPitchFactor = 1.0;
 
     function setMode(mode) {
@@ -284,71 +315,99 @@
       document.getElementById('cloudConfig').classList.toggle('visible', mode === 'cloud');
       document.getElementById('genStatus').textContent =
         mode === 'local'
-          ? 'الوضع المحلي: تحليل بصمة الطبقة الصوتية والنطق الفوري'
-          : 'الوضع السحابي: استنساخ عصبي عميق عبر Hugging Face';
+          ? 'الوضع المحلي: معالجة فورية داخل الجهاز'
+          : 'الوضع السحابي: تحويل عصبي عبر Hugging Face';
     }
 
-    async function toggleRecording() {
-      const btn = document.getElementById('btnRecord');
-      const status = document.getElementById('sampleStatus');
+    function setTask(task) {
+      currentTask = task;
+      document.getElementById('btnTaskS2S').classList.toggle('active', task === 's2s');
+      document.getElementById('btnTaskT2S').classList.toggle('active', task === 't2s');
+      document.getElementById('s2sBox').classList.toggle('hidden', task !== 's2s');
+      document.getElementById('t2sBox').classList.toggle('hidden', task !== 't2s');
+      document.getElementById('btnGenerate').textContent =
+        task === 's2s' ? 'تحويل الصوت إلى الصوت المستنسخ' : 'توليد النص بالصوت المستنسخ';
+    }
 
-      if (!isRecording) {
+    async function toggleRecording(target) {
+      const btnId = target === 'ref' ? 'btnRecordRef' : 'btnRecordSrc';
+      const statusId = target === 'ref' ? 'refStatus' : 'srcStatus';
+      const btn = document.getElementById(btnId);
+      const status = document.getElementById(statusId);
+
+      if (activeRecordTarget === null) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           recordedChunks = [];
           mediaRecorder = new MediaRecorder(stream);
+          activeRecordTarget = target;
 
           mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) recordedChunks.push(e.data);
           };
 
           mediaRecorder.onstop = async () => {
-            sampleBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+            const blob = new Blob(recordedChunks, { type: 'audio/webm' });
             stream.getTracks().forEach(track => track.stop());
-            await loadSampleAudio(sampleBlob, 'تم تسجيل العينة الصوتية بنجاح');
+            const finishedTarget = activeRecordTarget;
+            activeRecordTarget = null;
+            btn.classList.remove('recording');
+            btn.textContent = finishedTarget === 'ref' ? 'تسجيل عينة مرجعية' : 'تسجيل صوت المصدر';
+
+            if (finishedTarget === 'ref') {
+              refBlob = blob;
+              await loadAudioPreview(blob, 'refPlayer', 'refStatus', 'تم تسجيل العينة المرجعية بنجاح', true);
+            } else {
+              srcBlob = blob;
+              await loadAudioPreview(blob, 'srcPlayer', 'srcStatus', 'تم تسجيل صوت المصدر بنجاح', false);
+            }
           };
 
           mediaRecorder.start();
-          isRecording = true;
           btn.textContent = 'إيقاف التسجيل';
           btn.classList.add('recording');
           status.textContent = 'جاري التسجيل... تحدث بوضوح';
         } catch (err) {
+          activeRecordTarget = null;
+          btn.classList.remove('recording');
           status.textContent = 'تعذر الوصول للميكروفون: ' + err.message;
         }
-      } else {
+      } else if (activeRecordTarget === target && mediaRecorder) {
         mediaRecorder.stop();
-        isRecording = false;
-        btn.textContent = 'تسجيل صوتي';
-        btn.classList.remove('recording');
       }
     }
 
-    async function handleFileUpload(event) {
+    async function handleFileUpload(event, target) {
       const file = event.target.files[0];
       if (!file) return;
-      sampleBlob = file;
-      await loadSampleAudio(sampleBlob, `تم تحميل الملف: ${file.name}`);
-    }
-
-    async function loadSampleAudio(blob, labelText) {
-      const player = document.getElementById('samplePlayer');
-      const status = document.getElementById('sampleStatus');
-      const url = URL.createObjectURL(blob);
-      player.src = url;
-      player.classList.remove('hidden');
-      status.textContent = labelText + ' (جاري تحليل الطبقة الصوتية...)';
-
-      try {
-        extractedPitchFactor = await analyzeSamplePitch(blob);
-        status.textContent = `${labelText} | معامل النبرة المكتشف: ${extractedPitchFactor.toFixed(2)}`;
-      } catch (_) {
-        extractedPitchFactor = 1.0;
-        status.textContent = labelText;
+      if (target === 'ref') {
+        refBlob = file;
+        await loadAudioPreview(file, 'refPlayer', 'refStatus', `تم تحميل العينة المرجعية: ${file.name}`, true);
+      } else {
+        srcBlob = file;
+        await loadAudioPreview(file, 'srcPlayer', 'srcStatus', `تم تحميل صوت المصدر: ${file.name}`, false);
       }
     }
 
-    // تحليل تردد الصوت الأساسي محلياً عبر Web Audio API
+    async function loadAudioPreview(blob, playerId, statusId, labelText, analyzePitch) {
+      const player = document.getElementById(playerId);
+      const status = document.getElementById(statusId);
+      player.src = URL.createObjectURL(blob);
+      player.classList.remove('hidden');
+      status.textContent = labelText;
+
+      if (analyzePitch) {
+        status.textContent = labelText + ' (جاري تحليل الطبقة الصوتية...)';
+        try {
+          extractedPitchFactor = await analyzeSamplePitch(blob);
+          status.textContent = `${labelText} | معامل النبرة المكتشف: ${extractedPitchFactor.toFixed(2)}`;
+        } catch (_) {
+          extractedPitchFactor = 1.0;
+          status.textContent = labelText;
+        }
+      }
+    }
+
     async function analyzeSamplePitch(blob) {
       const arrayBuffer = await blob.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -368,23 +427,26 @@
       await audioCtx.close();
       if (activeSamples === 0) return 1.0;
       const avgFreq = (zeroCrossings * audioBuffer.sampleRate) / (2 * activeSamples);
-      // معايرة الطبقة بين 0.75 (صوت عميق) و 1.35 (صوت حاد)
-      const ratio = Math.min(1.35, Math.max(0.75, avgFreq / 165));
-      return ratio;
+      return Math.min(1.35, Math.max(0.75, avgFreq / 165));
     }
 
     async function generateVoice() {
-      const text = document.getElementById('ttsText').value.trim();
       const status = document.getElementById('genStatus');
       const btn = document.getElementById('btnGenerate');
 
-      if (!text) {
-        status.textContent = 'يرجى كتابة النص أولاً.';
+      if (!refBlob) {
+        status.textContent = 'يرجى تسجيل أو رفع العينة الصوتية المرجعية أولاً.';
         return;
       }
 
-      if (!sampleBlob) {
-        status.textContent = 'يرجى تسجيل أو رفع عينة صوتية أولاً.';
+      if (currentTask === 's2s' && !srcBlob) {
+        status.textContent = 'يرجى تسجيل أو رفع الصوت المراد تحويله أولاً.';
+        return;
+      }
+
+      const text = document.getElementById('ttsText').value.trim();
+      if (currentTask === 't2s' && !text) {
+        status.textContent = 'يرجى كتابة النص المراد نطقه أولاً.';
         return;
       }
 
@@ -393,9 +455,13 @@
 
       try {
         if (currentMode === 'local') {
-          await runLocalSynthesis(text, status);
+          if (currentTask === 's2s') {
+            await runLocalSpeechToSpeech(status);
+          } else {
+            await runLocalTextToSpeech(text, status);
+          }
         } else {
-          await runCloudCloning(text, status);
+          await runCloudProcess(text, status);
         }
       } catch (err) {
         status.textContent = 'حدث خطأ أثناء المعالجة: ' + err.message;
@@ -404,14 +470,94 @@
       }
     }
 
-    // المحرك المحلي: نطق النص مع مطابقة معامل الطبقة المستخرج من العينة
-    function runLocalSynthesis(text, status) {
+    // تحويل صوت إلى صوت محلياً عبر Web Audio API (ضبط النبرة والمرشح وتصدير WAV)
+    async function runLocalSpeechToSpeech(status) {
+      status.textContent = 'جاري تحويل صوت المصدر محلياً وفق طبقة العينة المرجعية...';
+
+      const arrayBuffer = await srcBlob.arrayBuffer();
+      const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+      await decodeCtx.close();
+
+      const rate = extractedPitchFactor;
+      const outLength = Math.max(1, Math.floor(decodedBuffer.length / rate));
+      const offlineCtx = new OfflineAudioContext(
+        decodedBuffer.numberOfChannels,
+        outLength,
+        decodedBuffer.sampleRate
+      );
+
+      const source = offlineCtx.createBufferSource();
+      source.buffer = decodedBuffer;
+      source.playbackRate.value = rate;
+
+      const filter = offlineCtx.createBiquadFilter();
+      filter.type = 'peaking';
+      filter.frequency.value = rate < 1.0 ? 420 : 1450;
+      filter.Q.value = 1.2;
+      filter.gain.value = 3.5;
+
+      source.connect(filter);
+      filter.connect(offlineCtx.destination);
+      source.start(0);
+
+      const renderedBuffer = await offlineCtx.startRendering();
+      outputBlob = audioBufferToWavBlob(renderedBuffer);
+
+      const player = document.getElementById('outputPlayer');
+      player.src = URL.createObjectURL(outputBlob);
+      document.getElementById('outputBox').classList.remove('hidden');
+      status.textContent = 'تم تحويل الصوت محلياً بنجاح (يمكنك تشغيله أو حفظه)';
+    }
+
+    function audioBufferToWavBlob(buffer) {
+      const numChannels = buffer.numberOfChannels;
+      const sampleRate = buffer.sampleRate;
+      const format = 1; // PCM
+      const bitDepth = 16;
+
+      const samples = buffer.getChannelData(0);
+      const dataLength = samples.length * (bitDepth / 8);
+      const totalLength = 44 + dataLength;
+      const arrayBuffer = new ArrayBuffer(totalLength);
+      const view = new DataView(arrayBuffer);
+
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, 36 + dataLength, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, format, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * (bitDepth / 8), true);
+      view.setUint16(32, bitDepth / 8, true);
+      view.setUint16(34, bitDepth, true);
+      writeString(view, 36, 'data');
+      view.setUint32(40, dataLength, true);
+
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      }
+
+      return new Blob([arrayBuffer], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    }
+
+    function runLocalTextToSpeech(text, status) {
       return new Promise((resolve, reject) => {
         if (!('speechSynthesis' in window)) {
           reject(new Error('محرك النطق المحلي غير مدعوم في هذا النظام'));
           return;
         }
-        status.textContent = 'جاري التوليد محلياً وفق بصمة النبرة...';
+        status.textContent = 'جاري النطق المحلي للنص...';
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
@@ -420,7 +566,7 @@
         utterance.rate = 0.95;
 
         utterance.onend = () => {
-          status.textContent = 'تم النطق المحلي بنجاح (للتصدير كملف، استخدم الوضع السحابي).';
+          status.textContent = 'تم النطق المحلي بنجاح';
           resolve();
         };
         utterance.onerror = (e) => reject(new Error(e.error || 'فشل النطق المحلي'));
@@ -429,37 +575,48 @@
       });
     }
 
-    // المحرك السحابي: الاتصال بـ Hugging Face Space
-    async function runCloudCloning(text, status) {
-      const baseUrl = document.getElementById('hfSpaceUrl').value.trim().replace(/\/$/, '');
-      if (!baseUrl) throw new Error('يرجى إدخال رابط Hugging Face Space');
-
-      status.textContent = 'جاري رفع العينة الصوتية إلى السحابة...';
+    async function uploadFileToSpace(baseUrl, blob, filename) {
       const formData = new FormData();
-      formData.append('files', sampleBlob, 'reference.wav');
-
-      const uploadRes = await fetch(`${baseUrl}/upload`, {
+      formData.append('files', blob, filename);
+      const res = await fetch(`${baseUrl}/upload`, {
         method: 'POST',
         body: formData
       });
+      if (!res.ok) {
+        throw new Error(`فشل رفع الملف (${res.status}) - تأكد من أن الـ Space نشط`);
+      }
+      const paths = await res.json();
+      return paths[0];
+    }
 
-      if (!uploadRes.ok) {
-        throw new Error(`فشل رفع العينة (${uploadRes.status}) - تأكد من أن الـ Space نشط`);
+    async function runCloudProcess(text, status) {
+      const baseUrl = document.getElementById('hfSpaceUrl').value.trim().replace(/\/$/, '');
+      if (!baseUrl) throw new Error('يرجى إدخال رابط Hugging Face Space');
+
+      status.textContent = 'جاري رفع العينة الصوتية المرجعية...';
+      const refRemotePath = await uploadFileToSpace(baseUrl, refBlob, 'reference.wav');
+
+      let payloadData;
+      if (currentTask === 's2s') {
+        status.textContent = 'جاري رفع صوت المصدر المراد تحويله...';
+        const srcRemotePath = await uploadFileToSpace(baseUrl, srcBlob, 'source.wav');
+        status.textContent = 'جاري تحويل الصوت إلى الصوت المستنسخ سحابياً...';
+        payloadData = [
+          { path: srcRemotePath, meta: { _type: 'gradio.FileData' } },
+          { path: refRemotePath, meta: { _type: 'gradio.FileData' } }
+        ];
+      } else {
+        status.textContent = 'جاري توليد النص بالصوت المستنسخ سحابياً...';
+        payloadData = [
+          text,
+          { path: refRemotePath, meta: { _type: 'gradio.FileData' } }
+        ];
       }
 
-      const uploadedPaths = await uploadRes.json();
-      const remoteAudioPath = uploadedPaths[0];
-
-      status.textContent = 'جاري استنساخ الصوت وتوليد النطق سحابياً...';
       const predictRes = await fetch(`${baseUrl}/api/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: [
-            text,
-            { path: remoteAudioPath, meta: { _type: 'gradio.FileData' } }
-          ]
-        })
+        body: JSON.stringify({ data: payloadData })
       });
 
       if (!predictRes.ok) {
@@ -480,7 +637,7 @@
       const player = document.getElementById('outputPlayer');
       player.src = URL.createObjectURL(outputBlob);
       document.getElementById('outputBox').classList.remove('hidden');
-      status.textContent = 'تم استنساخ الصوت سحابياً بنجاح!';
+      status.textContent = 'تم التحويل السحابي بنجاح!';
     }
 
     function downloadOutput() {
@@ -488,7 +645,7 @@
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64Data = reader.result;
-        const fileName = `cloned_voice_${Date.now()}.wav`;
+        const fileName = `voice_conversion_${Date.now()}.wav`;
 
         if (window.AndroidBridge && typeof window.AndroidBridge.saveAudioFile === 'function') {
           window.AndroidBridge.saveAudioFile(base64Data, fileName);
