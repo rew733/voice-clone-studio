@@ -2,23 +2,36 @@ package com.ramzi.voiceclone
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
+import android.webkit.DownloadListener
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +43,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var pendingPermissionRequest: PermissionRequest? = null
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    private val kikiVoiceUrl = "https://kikivoice.ai/"
+    private val localStudioUrl = "file:///android_asset/index.html"
 
     private val micPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -75,23 +91,97 @@ class MainActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         )
 
-        webView = WebView(this).apply {
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            layoutParams = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT
+        val rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#0B0F17"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
             )
         }
-        setContentView(webView)
+
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.parseColor("#131A26"))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val btnKiki = createNavButton("KikiVoice السحابي", "#10B981") {
+            webView.loadUrl(kikiVoiceUrl)
+        }
+
+        val btnLocal = createNavButton("الاستوديو المحلي", "#3B82F6") {
+            webView.loadUrl(localStudioUrl)
+        }
+
+        val btnReload = createNavButton("تحديث", "#334155") {
+            webView.reload()
+        }
+
+        topBar.addView(btnKiki)
+        topBar.addView(btnLocal)
+        topBar.addView(btnReload)
+
+        webView = WebView(this).apply {
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+
+        rootLayout.addView(topBar)
+        rootLayout.addView(webView)
+        setContentView(rootLayout)
 
         configureWebView()
         setupBackNavigation()
 
-        webView.loadUrl("file:///android_asset/index.html")
+        // الفتح المباشر على KikiVoice كما طلبت
+        webView.loadUrl(kikiVoiceUrl)
+    }
+
+    private fun createNavButton(title: String, hexColor: String, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            text = title
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            typeface = Typeface.DEFAULT_BOLD
+            isAllCaps = false
+            setBackgroundColor(Color.parseColor(hexColor))
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            val params = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            ).apply {
+                setMargins(dp(4), 0, dp(4), 0)
+            }
+            layoutParams = params
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value.toFloat(),
+            resources.displayMetrics
+        ).toInt()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun configureWebView() {
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
+
         val settings = webView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -99,6 +189,9 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = true
         settings.allowContentAccess = true
+        settings.loadWithOverviewMode = true
+        settings.useWideViewPort = true
+        settings.builtInZoomControls = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.userAgentString = settings.userAgentString.replace("; wv", "")
@@ -108,11 +201,20 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
-                request: android.webkit.WebResourceRequest?
+                request: WebResourceRequest?
             ): Boolean {
                 return false
             }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                injectBlobDownloadInterceptor()
+            }
         }
+
+        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            handleDownload(url, userAgent, contentDisposition, mimeType)
+        })
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
@@ -169,6 +271,88 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun injectBlobDownloadInterceptor() {
+        val js = """
+            (function() {
+                if (window.__blobHookInstalled) return;
+                window.__blobHookInstalled = true;
+                const origClick = HTMLAnchorElement.prototype.click;
+                HTMLAnchorElement.prototype.click = function() {
+                    if (this.href && this.href.startsWith('blob:')) {
+                        const fileName = this.download || ('kikivoice_' + Date.now() + '.mp3');
+                        fetch(this.href)
+                            .then(r => r.blob())
+                            .then(blob => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    if (window.AndroidBridge && window.AndroidBridge.saveAudioFile) {
+                                        window.AndroidBridge.saveAudioFile(reader.result, fileName);
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
+                            });
+                        return;
+                    }
+                    return origClick.apply(this, arguments);
+                };
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
+    }
+
+    private fun handleDownload(
+        url: String,
+        userAgent: String,
+        contentDisposition: String,
+        mimeType: String
+    ) {
+        try {
+            if (url.startsWith("data:")) {
+                val fileName = "kikivoice_${System.currentTimeMillis()}.mp3"
+                AndroidBridge().saveAudioFile(url, fileName)
+                return
+            }
+
+            if (url.startsWith("blob:")) {
+                val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    .ifBlank { "kikivoice_${System.currentTimeMillis()}.mp3" }
+                val fetchJs = """
+                    fetch('$url')
+                        .then(r => r.blob())
+                        .then(blob => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                window.AndroidBridge.saveAudioFile(reader.result, '$fileName');
+                            };
+                            reader.readAsDataURL(blob);
+                        });
+                """.trimIndent()
+                webView.evaluateJavascript(fetchJs, null)
+                return
+            }
+
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setMimeType(mimeType.ifBlank { "audio/mpeg" })
+                val cookies = CookieManager.getInstance().getCookie(url)
+                if (!cookies.isNullOrEmpty()) {
+                    addRequestHeader("cookie", cookies)
+                }
+                addRequestHeader("User-Agent", userAgent)
+                setTitle(fileName)
+                setDescription("جاري تحميل الملف الصوتي...")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            }
+
+            val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
+            Toast.makeText(this, "بدأ تحميل الملف إلى التنزيلات: $fileName", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذر تحميل الملف: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -192,10 +376,16 @@ class MainActivity : AppCompatActivity() {
                 }
                 val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
 
+                val mime = when {
+                    fileName.endsWith(".wav", true) -> "audio/wav"
+                    fileName.endsWith(".ogg", true) -> "audio/ogg"
+                    else -> "audio/mpeg"
+                }
+
                 val resolver = applicationContext.contentResolver
                 val contentValues = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(MediaStore.Downloads.MIME_TYPE, "audio/wav")
+                    put(MediaStore.Downloads.MIME_TYPE, mime)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         put(MediaStore.Downloads.IS_PENDING, 1)
                     }
