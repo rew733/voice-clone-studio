@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>اختيار الأصوات | Voice Clone Studio</title>
+  <title>اختيار وتجهيز الأصوات | Voice Clone Studio</title>
   <style>
     :root {
       --bg: #0b0f17;
@@ -133,14 +133,14 @@
       <p>اختر أو سجّل الأصوات داخل التطبيق، ثم انتقل إلى المعالجة في الموقع</p>
     </header>
 
-    <!-- العينة الصوتية المرجعية -->
+    <!-- 1. العينة الصوتية المرجعية -->
     <div class="card">
       <span class="label">1. العينة الصوتية المرجعية (الصوت المستهدف استنساخه)</span>
       <div class="audio-actions">
         <button type="button" class="btn btn-record" id="btnRecRef" onclick="toggleRec('ref')">تسجيل عينة</button>
         <label class="btn" style="margin:0;">
           اختيار ملف
-          <input type="file" accept="audio/*" class="hidden" onchange="onFilePick(event, 'ref')" />
+          <input type="file" accept="audio/*,*/*" class="hidden" onchange="onFilePick(event, 'ref')" />
         </label>
       </div>
       <div class="status" id="refStatus">لم يتم اختيار عينة مرجعية بعد</div>
@@ -150,14 +150,14 @@
       </button>
     </div>
 
-    <!-- الصوت المصدر -->
+    <!-- 2. الصوت المراد تحويله -->
     <div class="card">
       <span class="label">2. الصوت المراد تحويله</span>
       <div class="audio-actions">
         <button type="button" class="btn btn-record" id="btnRecSrc" onclick="toggleRec('src')">تسجيل صوت</button>
         <label class="btn" style="margin:0;">
           اختيار ملف
-          <input type="file" accept="audio/*" class="hidden" onchange="onFilePick(event, 'src')" />
+          <input type="file" accept="audio/*,*/*" class="hidden" onchange="onFilePick(event, 'src')" />
         </label>
       </div>
       <div class="status" id="srcStatus">لم يتم اختيار صوت مصدر بعد</div>
@@ -167,7 +167,7 @@
       </button>
     </div>
 
-    <!-- الانتقال للمعالجة في الموقع -->
+    <!-- 3. الانتقال للمعالجة في الموقع -->
     <div class="card">
       <button type="button" class="btn btn-site" onclick="processOnSite()">
         معالجة في الموقع (KikiVoice)
