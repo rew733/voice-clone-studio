@@ -104,12 +104,6 @@
       display: block;
     }
 
-    .hint {
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-top: 6px;
-    }
-
     input[type="text"], textarea {
       width: 100%;
       background: #090d14;
@@ -128,23 +122,6 @@
     textarea {
       min-height: 105px;
       resize: vertical;
-    }
-
-    .slider-row {
-      margin-top: 10px;
-    }
-
-    .slider-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.84rem;
-      color: #cbd5e1;
-      margin-bottom: 4px;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--primary);
     }
 
     .audio-actions {
@@ -208,6 +185,17 @@
       border-radius: 8px;
     }
 
+    .metrics-box {
+      margin-top: 10px;
+      background: #090d14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      line-height: 1.7;
+    }
+
     .status {
       font-size: 0.85rem;
       color: var(--muted);
@@ -231,7 +219,7 @@
   <div class="container">
     <header>
       <h1>استوديو استنساخ الأصوات</h1>
-      <p>تحويل نص إلى صوت + تحويل صوت إلى صوت (محلي وسحابي)</p>
+      <p>قياس طبقة الصوت المستنسخ وتطبيقها على الصوت المراد تحويله</p>
     </header>
 
     <!-- 1. وضع التشغيل -->
@@ -239,7 +227,7 @@
       <span class="label">1. وضع المعالجة</span>
       <div class="mode-switch">
         <button type="button" class="mode-btn active" id="btnModeLocal" onclick="setMode('local')">
-          محلي (داخل الجهاز)
+          محلي (قياس وتطبيق الطبقة)
         </button>
         <button type="button" class="mode-btn" id="btnModeCloud" onclick="setMode('cloud')">
           سحابي (Hugging Face)
@@ -249,23 +237,12 @@
       <div class="cloud-config" id="cloudConfig">
         <label class="label" style="margin-top: 10px;">رابط Hugging Face Space</label>
         <input type="text" id="hfSpaceUrl" value="https://tonyassi-voice-clone.hf.space" placeholder="https://username-space.hf.space" />
-        <div class="hint">
-          ملاحظة: إذا ظهر خطأ 404 على Space معين، فهذا يعني أن الـ Space متوقف أو نائم أو غيّر مسار واجهته؛ أدخل رابط Space نشط يدعم التحويل الصوتي.
-        </div>
-      </div>
-
-      <div class="slider-row" id="localControls">
-        <div class="slider-header">
-          <span>معامل التحويل المحلي (الطبقة واللون الصوتي)</span>
-          <span id="pitchShiftLabel">0.85x</span>
-        </div>
-        <input type="range" id="pitchShiftSlider" min="0.70" max="1.30" step="0.05" value="0.85" oninput="updatePitchShiftLabel()" />
       </div>
     </div>
 
-    <!-- 2. العينة الصوتية المرجعية -->
+    <!-- 2. العينة الصوتية المرجعية (الصوت المستنسخ المراد قياس طبقته) -->
     <div class="card">
-      <span class="label">2. العينة الصوتية المرجعية (الصوت المستهدف استنساخه)</span>
+      <span class="label">2. العينة الصوتية المرجعية (قياس طبقتها من كل النواحي)</span>
       <div class="audio-actions">
         <button type="button" class="btn btn-record" id="btnRecordRef" onclick="toggleRecording('ref')">
           تسجيل عينة مرجعية
@@ -277,11 +254,12 @@
       </div>
       <div class="status" id="refStatus">لم يتم تحديد عينة مرجعية بعد</div>
       <audio id="refPlayer" controls class="hidden"></audio>
+      <div class="metrics-box hidden" id="refMetrics"></div>
     </div>
 
-    <!-- 3. نوع التحويل: صوت إلى صوت أو نص إلى صوت -->
+    <!-- 3. الصوت المراد تحويله أو النص -->
     <div class="card">
-      <span class="label">3. نوع التوليد</span>
+      <span class="label">3. نوع الإدخال</span>
       <div class="mode-switch" style="margin-bottom: 12px;">
         <button type="button" class="mode-btn active" id="btnTaskS2S" onclick="setTask('s2s')">
           تحويل صوت إلى صوت
@@ -304,25 +282,26 @@
         </div>
         <div class="status" id="srcStatus">لم يتم تحديد صوت مصدر للتحويل بعد</div>
         <audio id="srcPlayer" controls class="hidden"></audio>
+        <div class="metrics-box hidden" id="srcMetrics"></div>
       </div>
 
       <div id="t2sBox" class="hidden">
-        <span class="label">النص المراد نطقه بالصوت المستنسخ</span>
-        <textarea id="ttsText" placeholder="اكتب النص هنا (يفضّل وضع التشكيل للنطق العربي الدقيق)..."></textarea>
+        <span class="label">النص المراد نطقه</span>
+        <textarea id="ttsText" placeholder="اكتب النص هنا..."></textarea>
       </div>
     </div>
 
-    <!-- 4. التوليد والنتيجة -->
+    <!-- 4. التطبيق والنتيجة -->
     <div class="card">
       <button type="button" class="btn btn-primary" id="btnGenerate" onclick="generateVoice()">
-        تحويل الصوت إلى الصوت المستنسخ
+        قياس وتطبيق الطبقة على الصوت
       </button>
-      <div class="status" id="genStatus">جاهز للتشغيل</div>
+      <div class="status" id="genStatus">جاهز للقياس والتطبيق</div>
 
       <div id="outputBox" class="hidden" style="margin-top: 12px;">
-        <span class="label">النتيجة الصوتية:</span>
+        <span class="label">الصوت الناتج بعد تطبيق الطبقة:</span>
         <audio id="outputPlayer" controls></audio>
-        <div class="status" id="outputMeta"></div>
+        <div class="metrics-box" id="outputMetrics"></div>
         <button type="button" class="btn btn-success" onclick="downloadOutput()">
           حفظ الملف الصوتي
         </button>
@@ -337,26 +316,21 @@
     let srcBlob = null;
     let outputBlob = null;
 
+    let refPitchProfile = null;
+    let srcPitchProfile = null;
+
     let mediaRecorder = null;
     let recordedChunks = [];
     let activeRecordTarget = null;
-    let extractedPitchFactor = 0.85;
-
-    function updatePitchShiftLabel() {
-      const val = parseFloat(document.getElementById('pitchShiftSlider').value);
-      extractedPitchFactor = val;
-      document.getElementById('pitchShiftLabel').textContent = `${val.toFixed(2)}x`;
-    }
 
     function setMode(mode) {
       currentMode = mode;
       document.getElementById('btnModeLocal').classList.toggle('active', mode === 'local');
       document.getElementById('btnModeCloud').classList.toggle('active', mode === 'cloud');
       document.getElementById('cloudConfig').classList.toggle('visible', mode === 'cloud');
-      document.getElementById('localControls').classList.toggle('hidden', mode !== 'local');
       document.getElementById('genStatus').textContent =
         mode === 'local'
-          ? 'الوضع المحلي: معالجة DSP وتصدير ملف WAV داخل الجهاز'
+          ? 'الوضع المحلي: قياس طبقة المرجع وتطبيقها على المصدر'
           : 'الوضع السحابي: استدعاء Hugging Face Space';
     }
 
@@ -367,7 +341,7 @@
       document.getElementById('s2sBox').classList.toggle('hidden', task !== 's2s');
       document.getElementById('t2sBox').classList.toggle('hidden', task !== 't2s');
       document.getElementById('btnGenerate').textContent =
-        task === 's2s' ? 'تحويل الصوت إلى الصوت المستنسخ' : 'توليد النص بالصوت المستنسخ';
+        task === 's2s' ? 'قياس وتطبيق الطبقة على الصوت' : 'تطبيق الطبقة على نطق النص';
     }
 
     async function toggleRecording(target) {
@@ -397,17 +371,17 @@
 
             if (finishedTarget === 'ref') {
               refBlob = blob;
-              await loadAudioPreview(blob, 'refPlayer', 'refStatus', 'تم تسجيل العينة المرجعية بنجاح', true);
+              await handleAudioReady(blob, 'ref');
             } else {
               srcBlob = blob;
-              await loadAudioPreview(blob, 'srcPlayer', 'srcStatus', 'تم تسجيل صوت المصدر بنجاح', false);
+              await handleAudioReady(blob, 'src');
             }
           };
 
           mediaRecorder.start();
           btn.textContent = 'إيقاف التسجيل';
           btn.classList.add('recording');
-          status.textContent = 'جاري التسجيل... تحدث بوضوح';
+          status.textContent = 'جاري التسجيل...';
         } catch (err) {
           activeRecordTarget = null;
           btn.classList.remove('recording');
@@ -423,58 +397,136 @@
       if (!file) return;
       if (target === 'ref') {
         refBlob = file;
-        await loadAudioPreview(file, 'refPlayer', 'refStatus', `تم تحميل العينة المرجعية: ${file.name}`, true);
+        await handleAudioReady(file, 'ref', file.name);
       } else {
         srcBlob = file;
-        await loadAudioPreview(file, 'srcPlayer', 'srcStatus', `تم تحميل صوت المصدر: ${file.name}`, false);
+        await handleAudioReady(file, 'src', file.name);
       }
     }
 
-    async function loadAudioPreview(blob, playerId, statusId, labelText, analyzePitch) {
-      const player = document.getElementById(playerId);
-      const status = document.getElementById(statusId);
+    async function handleAudioReady(blob, target, fileName = null) {
+      const isRef = target === 'ref';
+      const player = document.getElementById(isRef ? 'refPlayer' : 'srcPlayer');
+      const status = document.getElementById(isRef ? 'refStatus' : 'srcStatus');
+      const metricsBox = document.getElementById(isRef ? 'refMetrics' : 'srcMetrics');
+
       player.src = URL.createObjectURL(blob);
       player.classList.remove('hidden');
-      status.textContent = labelText;
+      status.textContent = fileName
+        ? `تم تحميل (${fileName}) — جاري قياس الطبقة من كل النواحي...`
+        : 'تم التسجيل — جاري قياس الطبقة من كل النواحي...';
 
-      if (analyzePitch) {
-        status.textContent = labelText + ' (جاري تحليل الطبقة الصوتية...)';
-        try {
-          const detected = await analyzeSamplePitch(blob);
-          extractedPitchFactor = detected;
-          const slider = document.getElementById('pitchShiftSlider');
-          const clamped = Math.min(1.30, Math.max(0.70, parseFloat(detected.toFixed(2))));
-          slider.value = clamped;
-          extractedPitchFactor = clamped;
-          document.getElementById('pitchShiftLabel').textContent = `${clamped.toFixed(2)}x`;
-          status.textContent = `${labelText} | الطبقة المقترحة: ${clamped.toFixed(2)}x`;
-        } catch (_) {
-          status.textContent = labelText;
+      try {
+        const profile = await measurePitchProfile(blob);
+        if (isRef) {
+          refPitchProfile = profile;
+        } else {
+          srcPitchProfile = profile;
         }
+
+        status.textContent = isRef
+          ? 'اكتمل قياس طبقة العينة المرجعية'
+          : 'اكتمل قياس طبقة صوت المصدر';
+
+        metricsBox.classList.remove('hidden');
+        metricsBox.innerHTML =
+          `المتوسط (Mean): <b>${profile.meanHz.toFixed(1)} Hz</b> | ` +
+          `الأدنى (Min): <b>${profile.minHz.toFixed(1)} Hz</b> | ` +
+          `الأعلى (Max): <b>${profile.maxHz.toFixed(1)} Hz</b><br>` +
+          `المدى (Span): <b>${profile.spanHz.toFixed(1)} Hz</b> | ` +
+          `الانحراف (Std): <b>${profile.stdHz.toFixed(1)} Hz</b> | ` +
+          `الإطارات المقاسة: <b>${profile.frameCount}</b>`;
+      } catch (err) {
+        status.textContent = 'تعذر قياس الطبقة: ' + err.message;
       }
     }
 
-    async function analyzeSamplePitch(blob) {
+    // قياس طبقة الصوت (F0) عبر نوافذ زمنية متعددة واستخراج الإحصاءات الكاملة ومسار الطبقة
+    async function measurePitchProfile(blob) {
       const arrayBuffer = await blob.arrayBuffer();
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioCtx();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      const data = audioBuffer.getChannelData(0);
+      await audioCtx.close();
 
-      let zeroCrossings = 0;
-      let activeSamples = 0;
-      const step = Math.max(1, Math.floor(data.length / 220000));
-      for (let i = step; i < data.length; i += step) {
-        if (Math.abs(data[i]) > 0.02) {
-          activeSamples++;
-          if ((data[i - step] < 0 && data[i] >= 0) || (data[i - step] >= 0 && data[i] < 0)) {
-            zeroCrossings++;
+      const sampleRate = audioBuffer.sampleRate;
+      const channelData = audioBuffer.getChannelData(0);
+
+      const frameSize = Math.max(512, Math.floor(sampleRate * 0.04)); // 40ms
+      const hopSize = Math.max(256, Math.floor(sampleRate * 0.02));  // 20ms
+      const minLag = Math.max(2, Math.floor(sampleRate / 500));     // حتى 500 Hz
+      const maxLag = Math.min(frameSize - 1, Math.floor(sampleRate / 65)); // من 65 Hz
+
+      const pitches = [];
+
+      for (let start = 0; start + frameSize <= channelData.length; start += hopSize) {
+        let rms = 0;
+        for (let i = 0; i < frameSize; i++) {
+          const v = channelData[start + i];
+          rms += v * v;
+        }
+        rms = Math.sqrt(rms / frameSize);
+        if (rms < 0.015) continue; // تجاهل الصمت والضوضاء المنخفضة جداً
+
+        let bestLag = -1;
+        let bestCorr = 0;
+
+        for (let lag = minLag; lag <= maxLag; lag++) {
+          let num = 0;
+          let denomA = 0;
+          let denomB = 0;
+          const limit = frameSize - lag;
+          for (let i = 0; i < limit; i++) {
+            const a = channelData[start + i];
+            const b = channelData[start + i + lag];
+            num += a * b;
+            denomA += a * a;
+            denomB += b * b;
+          }
+          const denom = Math.sqrt(denomA * denomB);
+          const corr = denom > 1e-9 ? num / denom : 0;
+          if (corr > bestCorr) {
+            bestCorr = corr;
+            bestLag = lag;
+          }
+        }
+
+        if (bestLag > 0 && bestCorr > 0.35) {
+          const f0 = sampleRate / bestLag;
+          if (f0 >= 65 && f0 <= 500) {
+            pitches.push(f0);
           }
         }
       }
-      await audioCtx.close();
-      if (activeSamples === 0) return 0.90;
-      const avgFreq = (zeroCrossings * audioBuffer.sampleRate) / (2 * activeSamples);
-      return Math.min(1.25, Math.max(0.75, avgFreq / 180));
+
+      if (pitches.length === 0) {
+        return {
+          meanHz: 165.0,
+          minHz: 130.0,
+          maxHz: 210.0,
+          spanHz: 80.0,
+          stdHz: 20.0,
+          frameCount: 0,
+          contour: [165.0]
+        };
+      }
+
+      const sorted = [...pitches].sort((a, b) => a - b);
+      const p05 = sorted[Math.floor(sorted.length * 0.05)] || sorted[0];
+      const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] || sorted[sorted.length - 1];
+      const meanHz = pitches.reduce((acc, v) => acc + v, 0) / pitches.length;
+      const variance = pitches.reduce((acc, v) => acc + Math.pow(v - meanHz, 2), 0) / pitches.length;
+      const stdHz = Math.sqrt(variance);
+
+      return {
+        meanHz,
+        minHz: p05,
+        maxHz: p95,
+        spanHz: Math.max(0, p95 - p05),
+        stdHz,
+        frameCount: pitches.length,
+        contour: pitches
+      };
     }
 
     async function generateVoice() {
@@ -482,18 +534,22 @@
       const btn = document.getElementById('btnGenerate');
 
       if (!refBlob) {
-        status.textContent = 'يرجى تسجيل أو رفع العينة الصوتية المرجعية أولاً.';
+        status.textContent = 'يرجى تحديد العينة الصوتية المرجعية أولاً لقياس طبقتها.';
         return;
       }
 
+      if (!refPitchProfile) {
+        refPitchProfile = await measurePitchProfile(refBlob);
+      }
+
       if (currentTask === 's2s' && !srcBlob) {
-        status.textContent = 'يرجى تسجيل أو رفع الصوت المراد تحويله أولاً.';
+        status.textContent = 'يرجى تحديد الصوت المراد تحويله أولاً.';
         return;
       }
 
       const text = document.getElementById('ttsText').value.trim();
       if (currentTask === 't2s' && !text) {
-        status.textContent = 'يرجى كتابة النص المراد نطقه أولاً.';
+        status.textContent = 'يرجى كتابة النص أولاً.';
         return;
       }
 
@@ -503,71 +559,101 @@
       try {
         if (currentMode === 'local') {
           if (currentTask === 's2s') {
-            await runLocalSpeechToSpeech(status);
+            await applyMeasuredPitchToSource(status);
           } else {
-            await runLocalTextToSpeech(text, status);
+            await applyMeasuredPitchToText(text, status);
           }
         } else {
           await runCloudProcess(text, status);
         }
       } catch (err) {
-        status.textContent = 'حدث خطأ أثناء المعالجة: ' + err.message;
+        status.textContent = 'حدث خطأ أثناء التطبيق: ' + err.message;
       } finally {
         btn.disabled = false;
       }
     }
 
-    async function runLocalSpeechToSpeech(status) {
-      status.textContent = 'جاري تطبيق المعالجة الصوتية المحلية وتوليد ملف WAV...';
+    // تطبيق قياس طبقة العينة المرجعية (المتوسط + المدى + النطاق) على الصوت المصدر
+    async function applyMeasuredPitchToSource(status) {
+      status.textContent = 'جاري قياس ومواءمة طبقة المرجع وتطبيقها على الصوت المصدر...';
+
+      if (!srcPitchProfile) {
+        srcPitchProfile = await measurePitchProfile(srcBlob);
+      }
 
       const arrayBuffer = await srcBlob.arrayBuffer();
-      const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const decodeCtx = new AudioCtx();
       const decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
       await decodeCtx.close();
 
-      const rate = extractedPitchFactor;
-      const outLength = Math.max(1, Math.floor(decodedBuffer.length / rate));
-      const offlineCtx = new OfflineAudioContext(
-        1,
-        outLength,
-        decodedBuffer.sampleRate
-      );
+      const sampleRate = decodedBuffer.sampleRate;
+      const inputData = decodedBuffer.getChannelData(0);
 
-      const source = offlineCtx.createBufferSource();
-      source.buffer = decodedBuffer;
-      source.playbackRate.value = rate;
+      // حساب نسبة الطبقة مع مواءمة المدى والانحراف بين المرجع والمصدر
+      const baseRatio = refPitchProfile.meanHz / Math.max(65, srcPitchProfile.meanHz);
+      const spanRatio = (refPitchProfile.spanHz + 1e-3) / Math.max(10, srcPitchProfile.spanHz + 1e-3);
+      const blendedSpanFactor = Math.min(1.25, Math.max(0.80, Math.sqrt(spanRatio)));
 
-      const lowShelf = offlineCtx.createBiquadFilter();
-      lowShelf.type = 'lowshelf';
-      lowShelf.frequency.value = 260;
-      lowShelf.gain.value = rate < 1.0 ? 5.5 : -2.0;
+      const effectiveRatio = Math.min(1.6, Math.max(0.6, baseRatio * blendedSpanFactor));
 
-      const presence = offlineCtx.createBiquadFilter();
-      presence.type = 'peaking';
-      presence.frequency.value = rate < 1.0 ? 650 : 1850;
-      presence.Q.value = 1.4;
-      presence.gain.value = 4.5;
+      // إعادة بناء الإشارة عبر مقاطع صغيرة لتتبع منحنى الطبقة وتجنب التشويه
+      const chunkSize = Math.max(256, Math.floor(sampleRate * 0.025)); // 25ms
+      const outputChunks = [];
 
-      const highCut = offlineCtx.createBiquadFilter();
-      highCut.type = 'highshelf';
-      highCut.frequency.value = 3400;
-      highCut.gain.value = rate < 1.0 ? -3.0 : 3.5;
+      for (let i = 0; i < inputData.length; i += chunkSize) {
+        const end = Math.min(inputData.length, i + chunkSize);
+        const slice = inputData.slice(i, end);
 
-      source.connect(lowShelf);
-      lowShelf.connect(presence);
-      presence.connect(highCut);
-      highCut.connect(offlineCtx.destination);
-      source.start(0);
+        // تقدير موضعي للطبقة داخل المقطع إن أمكن
+        const progress = inputData.length > 0 ? i / inputData.length : 0;
+        const contourIdx = Math.min(
+          refPitchProfile.contour.length - 1,
+          Math.floor(progress * refPitchProfile.contour.length)
+        );
+        const localRefF0 = refPitchProfile.contour[contourIdx] || refPitchProfile.meanHz;
+        const localRatio = Math.min(
+          1.65,
+          Math.max(0.58, (localRefF0 / Math.max(65, srcPitchProfile.meanHz)) * blendedSpanFactor)
+        );
 
-      const renderedBuffer = await offlineCtx.startRendering();
-      outputBlob = audioBufferToWavBlob(renderedBuffer);
+        const targetLen = Math.max(1, Math.round(slice.length / localRatio));
+        const resampled = new Float32Array(targetLen);
+
+        for (let j = 0; j < targetLen; j++) {
+          const srcPos = j * localRatio;
+          const idx0 = Math.floor(srcPos);
+          const idx1 = Math.min(slice.length - 1, idx0 + 1);
+          const frac = srcPos - idx0;
+          resampled[j] = slice[idx0] * (1 - frac) + slice[idx1] * frac;
+        }
+
+        outputChunks.push(resampled);
+      }
+
+      const totalSamples = outputChunks.reduce((sum, arr) => sum + arr.length, 0);
+      const finalSamples = new Float32Array(totalSamples);
+      let cursor = 0;
+      for (const chunk of outputChunks) {
+        finalSamples.set(chunk, cursor);
+        cursor += chunk.length;
+      }
+
+      const outCtx = new AudioCtx();
+      const outBuffer = outCtx.createBuffer(1, Math.max(1, finalSamples.length), sampleRate);
+      outBuffer.copyToChannel(finalSamples, 0);
+      await outCtx.close();
+
+      outputBlob = audioBufferToWavBlob(outBuffer);
 
       const player = document.getElementById('outputPlayer');
       player.src = URL.createObjectURL(outputBlob);
-      document.getElementById('outputMeta').textContent =
-        `معامل التحويل: ${rate.toFixed(2)}x | المدة الناتجة: ${renderedBuffer.duration.toFixed(1)} ثانية | الحجم: ${(outputBlob.size / 1024).toFixed(1)} KB`;
+      document.getElementById('outputMetrics').innerHTML =
+        `طبقة المرجع: <b>${refPitchProfile.meanHz.toFixed(1)} Hz</b> (${refPitchProfile.minHz.toFixed(0)} - ${refPitchProfile.maxHz.toFixed(0)} Hz)<br>` +
+        `طبقة المصدر قبل التطبيق: <b>${srcPitchProfile.meanHz.toFixed(1)} Hz</b><br>` +
+        `معامل التطبيق الفعلي: <b>${effectiveRatio.toFixed(2)}x</b> | المدة: <b>${outBuffer.duration.toFixed(1)}s</b>`;
       document.getElementById('outputBox').classList.remove('hidden');
-      status.textContent = 'تم توليد الملف الصوتي المحلي بنجاح؛ يمكنك تشغيله وحفظه.';
+      status.textContent = 'تم قياس طبقة المرجع وتطبيقها على الصوت بنجاح.';
     }
 
     function audioBufferToWavBlob(buffer) {
@@ -609,22 +695,26 @@
       }
     }
 
-    function runLocalTextToSpeech(text, status) {
+    function applyMeasuredPitchToText(text, status) {
       return new Promise((resolve, reject) => {
         if (!('speechSynthesis' in window)) {
           reject(new Error('محرك النطق المحلي غير مدعوم في هذا النظام'));
           return;
         }
-        status.textContent = 'جاري النطق المحلي للنص...';
+        status.textContent = 'جاري تطبيق طبقة المرجع المقاسة على نطق النص...';
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = /[\u0600-\u06FF]/.test(text) ? 'ar-SA' : 'en-US';
-        utterance.pitch = extractedPitchFactor;
+        const normalizedPitch = Math.min(1.6, Math.max(0.6, refPitchProfile.meanHz / 165));
+        utterance.pitch = normalizedPitch;
         utterance.rate = 0.95;
 
         utterance.onend = () => {
-          status.textContent = 'تم النطق المحلي بنجاح';
+          document.getElementById('outputMetrics').innerHTML =
+            `طبقة المرجع المقاسة: <b>${refPitchProfile.meanHz.toFixed(1)} Hz</b> | معامل النطق: <b>${normalizedPitch.toFixed(2)}x</b>`;
+          document.getElementById('outputBox').classList.remove('hidden');
+          status.textContent = 'تم تطبيق الطبقة المقاسة على النص بنجاح';
           resolve();
         };
         utterance.onerror = (e) => reject(new Error(e.error || 'فشل النطق المحلي'));
@@ -656,7 +746,7 @@
         } catch (_) {}
       }
 
-      throw new Error(`فشل رفع الملف (${lastStatus || 'اتصال'}) - تأكد من رابط Space ونشاطه`);
+      throw new Error(`فشل رفع الملف (${lastStatus || 'اتصال'})`);
     }
 
     async function runCloudProcess(text, status) {
@@ -668,15 +758,15 @@
 
       let payloadData;
       if (currentTask === 's2s') {
-        status.textContent = 'جاري رفع صوت المصدر المراد تحويله...';
+        status.textContent = 'جاري رفع صوت المصدر...';
         const srcRemotePath = await uploadFileToSpace(baseUrl, srcBlob, 'source.wav');
-        status.textContent = 'جاري تحويل الصوت سحابياً...';
+        status.textContent = 'جاري التحويل سحابياً...';
         payloadData = [
           { path: srcRemotePath, meta: { _type: 'gradio.FileData' } },
           { path: refRemotePath, meta: { _type: 'gradio.FileData' } }
         ];
       } else {
-        status.textContent = 'جاري توليد النص سحابياً...';
+        status.textContent = 'جاري التوليد سحابياً...';
         payloadData = [
           text,
           { path: refRemotePath, meta: { _type: 'gradio.FileData' } }
@@ -706,7 +796,8 @@
 
       const player = document.getElementById('outputPlayer');
       player.src = URL.createObjectURL(outputBlob);
-      document.getElementById('outputMeta').textContent = `الحجم: ${(outputBlob.size / 1024).toFixed(1)} KB`;
+      document.getElementById('outputMetrics').innerHTML =
+        `تم الاستلام من السحابة | الحجم: <b>${(outputBlob.size / 1024).toFixed(1)} KB</b>`;
       document.getElementById('outputBox').classList.remove('hidden');
       status.textContent = 'تم التحويل السحابي بنجاح!';
     }
@@ -716,7 +807,7 @@
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64Data = reader.result;
-        const fileName = `voice_conversion_${Date.now()}.wav`;
+        const fileName = `pitch_matched_${Date.now()}.wav`;
 
         if (window.AndroidBridge && typeof window.AndroidBridge.saveAudioFile === 'function') {
           window.AndroidBridge.saveAudioFile(base64Data, fileName);
