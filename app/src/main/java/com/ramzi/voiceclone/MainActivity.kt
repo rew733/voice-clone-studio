@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -68,18 +69,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val fileChooserLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    private val fileChooserIntentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
         val callback = filePathCallback
         filePathCallback = null
-        if (callback != null) {
-            if (uri != null) {
-                callback.onReceiveValue(arrayOf(uri))
-            } else {
-                callback.onReceiveValue(null)
+        if (callback == null) return@registerForActivityResult
+
+        val data = result.data
+        val uris: Array<Uri>? = when {
+            result.resultCode != RESULT_OK || data == null -> null
+            data.clipData != null -> {
+                val clip = data.clipData!!
+                Array(clip.itemCount) { index -> clip.getItemAt(index).uri }
             }
+            data.data != null -> arrayOf(data.data!!)
+            else -> null
         }
+        callback.onReceiveValue(uris)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -111,11 +118,11 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        val btnKiki = createNavButton("KikiVoice السحابي", "#10B981") {
+        val btnKiki = createNavButton("معالجة في الموقع", "#10B981") {
             webView.loadUrl(kikiVoiceUrl)
         }
 
-        val btnLocal = createNavButton("الاستوديو المحلي", "#3B82F6") {
+        val btnLocal = createNavButton("اختيار الأصوات", "#3B82F6") {
             webView.loadUrl(localStudioUrl)
         }
 
@@ -143,7 +150,6 @@ class MainActivity : AppCompatActivity() {
         configureWebView()
         setupBackNavigation()
 
-        // الفتح المباشر على KikiVoice كما طلبت
         webView.loadUrl(kikiVoiceUrl)
     }
 
@@ -174,6 +180,42 @@ class MainActivity : AppCompatActivity() {
             value.toFloat(),
             resources.displayMetrics
         ).toInt()
+    }
+
+    private fun launchSafeFileChooser(acceptTypes: Array<String>?) {
+        val candidateMime = acceptTypes
+            ?.map { it.trim() }
+            ?.firstOrNull { it.contains("/") && !it.startsWith(".") }
+            ?: "*/*"
+
+        val baseIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = candidateMime
+        }
+
+        val fallbackIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+
+        val pm = packageManager
+        val chosenIntent = when {
+            baseIntent.resolveActivity(pm) != null -> Intent.createChooser(baseIntent, "اختر ملفاً صوتياً")
+            fallbackIntent.resolveActivity(pm) != null -> Intent.createChooser(fallbackIntent, "اختر ملفاً")
+            else -> null
+        }
+
+        if (chosenIntent != null) {
+            fileChooserIntentLauncher.launch(chosenIntent)
+        } else {
+            filePathCallback?.onReceiveValue(null)
+            filePathCallback = null
+            Toast.makeText(
+                this,
+                "لم يتم العثور على تطبيق لإدارة الملفات على الجهاز",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -226,10 +268,7 @@ class MainActivity : AppCompatActivity() {
                 this@MainActivity.filePathCallback = filePathCallback
 
                 return try {
-                    val mimeType = fileChooserParams?.acceptTypes
-                        ?.firstOrNull { it.isNotBlank() }
-                        ?: "audio/*"
-                    fileChooserLauncher.launch(mimeType)
+                    launchSafeFileChooser(fileChooserParams?.acceptTypes)
                     true
                 } catch (e: Exception) {
                     this@MainActivity.filePathCallback = null
@@ -424,6 +463,13 @@ class MainActivity : AppCompatActivity() {
                         Toast.LENGTH_SHORT
                     ).show()
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun openCloudSite() {
+            runOnUiThread {
+                webView.loadUrl(kikiVoiceUrl)
             }
         }
     }
