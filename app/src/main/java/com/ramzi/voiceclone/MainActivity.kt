@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -69,24 +68,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val fileChooserIntentLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    private val singleFileLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
         val callback = filePathCallback
         filePathCallback = null
-        if (callback == null) return@registerForActivityResult
-
-        val data = result.data
-        val uris: Array<Uri>? = when {
-            result.resultCode != RESULT_OK || data == null -> null
-            data.clipData != null -> {
-                val clip = data.clipData!!
-                Array(clip.itemCount) { index -> clip.getItemAt(index).uri }
+        if (callback != null) {
+            if (uri != null) {
+                callback.onReceiveValue(arrayOf(uri))
+            } else {
+                callback.onReceiveValue(null)
             }
-            data.data != null -> arrayOf(data.data!!)
-            else -> null
         }
-        callback.onReceiveValue(uris)
+    }
+
+    private val multiFileLauncher = registerForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        val callback = filePathCallback
+        filePathCallback = null
+        if (callback != null) {
+            if (uris.isNotEmpty()) {
+                callback.onReceiveValue(uris.toTypedArray())
+            } else {
+                callback.onReceiveValue(null)
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -150,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         configureWebView()
         setupBackNavigation()
 
-        webView.loadUrl(kikiVoiceUrl)
+        webView.loadUrl(localStudioUrl)
     }
 
     private fun createNavButton(title: String, hexColor: String, onClick: () -> Unit): Button {
@@ -182,40 +189,18 @@ class MainActivity : AppCompatActivity() {
         ).toInt()
     }
 
-    private fun launchSafeFileChooser(acceptTypes: Array<String>?) {
-        val candidateMime = acceptTypes
-            ?.map { it.trim() }
-            ?.firstOrNull { it.contains("/") && !it.startsWith(".") }
-            ?: "*/*"
+    private fun resolveMimeType(acceptTypes: Array<String>?): String {
+        if (acceptTypes == null || acceptTypes.isEmpty()) return "*/*"
+        val normalized = acceptTypes
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
 
-        val baseIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = candidateMime
-        }
-
-        val fallbackIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
-
-        val pm = packageManager
-        val chosenIntent = when {
-            baseIntent.resolveActivity(pm) != null -> Intent.createChooser(baseIntent, "اختر ملفاً صوتياً")
-            fallbackIntent.resolveActivity(pm) != null -> Intent.createChooser(fallbackIntent, "اختر ملفاً")
-            else -> null
-        }
-
-        if (chosenIntent != null) {
-            fileChooserIntentLauncher.launch(chosenIntent)
-        } else {
-            filePathCallback?.onReceiveValue(null)
-            filePathCallback = null
-            Toast.makeText(
-                this,
-                "لم يتم العثور على تطبيق لإدارة الملفات على الجهاز",
-                Toast.LENGTH_LONG
-            ).show()
-        }
+        if (normalized.isEmpty()) return "*/*"
+        if (normalized.any { it == "*/*" }) return "*/*"
+        if (normalized.any { it.startsWith("audio/") }) return "audio/*"
+        if (normalized.any { it.startsWith("video/") }) return "*/*"
+        val firstMime = normalized.firstOrNull { it.contains("/") }
+        return firstMime ?: "*/*"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -264,22 +249,36 @@ class MainActivity : AppCompatActivity() {
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
+                if (filePathCallback == null) return false
                 this@MainActivity.filePathCallback?.onReceiveValue(null)
                 this@MainActivity.filePathCallback = filePathCallback
 
+                val mime = resolveMimeType(fileChooserParams?.acceptTypes)
+                val allowMultiple = fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+
                 return try {
-                    launchSafeFileChooser(fileChooserParams?.acceptTypes)
-                    true
-                } catch (e: Exception) {
-                    this@MainActivity.filePathCallback = null
-                    runOnUiThread {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "تعذر فتح مستعرض الملفات: ${e.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                    if (allowMultiple) {
+                        multiFileLauncher.launch(mime)
+                    } else {
+                        singleFileLauncher.launch(mime)
                     }
-                    false
+                    true
+                } catch (_: Exception) {
+                    try {
+                        singleFileLauncher.launch("*/*")
+                        true
+                    } catch (e: Exception) {
+                        this@MainActivity.filePathCallback?.onReceiveValue(null)
+                        this@MainActivity.filePathCallback = null
+                        runOnUiThread {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "تعذر فتح مستعرض الملفات: ${e.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        false
+                    }
                 }
             }
 
