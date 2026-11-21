@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>الاستوديو المحلي | Voice Clone Studio</title>
+  <title>اختيار الأصوات | Voice Clone Studio</title>
   <style>
     :root {
       --bg: #0b0f17;
@@ -68,55 +68,11 @@
       color: #e2e8f0;
     }
 
-    textarea {
-      width: 100%;
-      min-height: 120px;
-      background: #090d14;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      color: var(--text);
-      font-size: 0.95rem;
-      resize: vertical;
-      outline: none;
-    }
-
-    textarea:focus {
-      border-color: var(--primary);
-    }
-
-    .controls-grid {
+    .audio-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
-      margin-top: 10px;
-    }
-
-    .control-box {
-      background: #090d14;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px;
-    }
-
-    .control-box span {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.82rem;
-      color: #cbd5e1;
-      margin-bottom: 6px;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--primary);
-    }
-
-    .btn-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 12px;
+      margin-bottom: 8px;
     }
 
     .btn {
@@ -125,8 +81,8 @@
       justify-content: center;
       border: none;
       border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 0.92rem;
+      padding: 11px 12px;
+      font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
       color: #fff;
@@ -134,121 +90,180 @@
       text-decoration: none;
     }
 
-    .btn-primary {
-      background: var(--primary);
-    }
-
-    .btn-primary:hover {
-      background: var(--primary-hover);
-    }
-
-    .btn-stop {
+    .btn-record.recording {
       background: var(--danger);
     }
 
-    .btn-cloud {
+    .btn-save {
+      width: 100%;
+      background: var(--primary);
+      margin-top: 8px;
+    }
+
+    .btn-site {
       width: 100%;
       background: var(--accent);
-      padding: 13px;
-      font-size: 0.96rem;
+      padding: 14px;
+      font-size: 1rem;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 8px;
+      height: 38px;
     }
 
     .status {
-      font-size: 0.85rem;
+      font-size: 0.83rem;
       color: var(--muted);
-      margin-top: 10px;
+      margin-top: 6px;
       text-align: center;
+      word-break: break-word;
+    }
+
+    .hidden {
+      display: none !important;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>الاستوديو المحلي للنطق</h1>
-      <p>قراءة نصوص محلية بدون إنترنت، أو الانتقال إلى KikiVoice للاستنساخ السحابي</p>
+      <h1>اختيار وتجهيز الأصوات</h1>
+      <p>اختر أو سجّل الأصوات داخل التطبيق، ثم انتقل إلى المعالجة في الموقع</p>
     </header>
 
+    <!-- العينة الصوتية المرجعية -->
     <div class="card">
-      <a class="btn btn-cloud" href="https://kikivoice.ai/">الانتقال إلى KikiVoice لاستنساخ الأصوات</a>
+      <span class="label">1. العينة الصوتية المرجعية (الصوت المستهدف استنساخه)</span>
+      <div class="audio-actions">
+        <button type="button" class="btn btn-record" id="btnRecRef" onclick="toggleRec('ref')">تسجيل عينة</button>
+        <label class="btn" style="margin:0;">
+          اختيار ملف
+          <input type="file" accept="audio/*" class="hidden" onchange="onFilePick(event, 'ref')" />
+        </label>
+      </div>
+      <div class="status" id="refStatus">لم يتم اختيار عينة مرجعية بعد</div>
+      <audio id="refAudio" controls class="hidden"></audio>
+      <button type="button" class="btn btn-save hidden" id="btnSaveRef" onclick="saveToDownloads('ref')">
+        حفظ العينة في التنزيلات للرفع في الموقع
+      </button>
     </div>
 
+    <!-- الصوت المصدر -->
     <div class="card">
-      <label class="label" for="localText">نطق نص محلياً داخل الجهاز</label>
-      <textarea id="localText" placeholder="اكتب النص هنا لتجربة النطق المحلي السريع..."></textarea>
-
-      <div class="controls-grid">
-        <div class="control-box">
-          <span>
-            <label for="rateRange">السرعة</label>
-            <strong id="rateVal">0.95x</strong>
-          </span>
-          <input id="rateRange" type="range" min="0.60" max="1.40" step="0.05" value="0.95" oninput="updateSliders()" />
-        </div>
-
-        <div class="control-box">
-          <span>
-            <label for="pitchRange">الطبقة</label>
-            <strong id="pitchVal">1.00x</strong>
-          </span>
-          <input id="pitchRange" type="range" min="0.70" max="1.30" step="0.05" value="1.00" oninput="updateSliders()" />
-        </div>
+      <span class="label">2. الصوت المراد تحويله</span>
+      <div class="audio-actions">
+        <button type="button" class="btn btn-record" id="btnRecSrc" onclick="toggleRec('src')">تسجيل صوت</button>
+        <label class="btn" style="margin:0;">
+          اختيار ملف
+          <input type="file" accept="audio/*" class="hidden" onchange="onFilePick(event, 'src')" />
+        </label>
       </div>
+      <div class="status" id="srcStatus">لم يتم اختيار صوت مصدر بعد</div>
+      <audio id="srcAudio" controls class="hidden"></audio>
+      <button type="button" class="btn btn-save hidden" id="btnSaveSrc" onclick="saveToDownloads('src')">
+        حفظ الصوت المصدر في التنزيلات للرفع في الموقع
+      </button>
+    </div>
 
-      <div class="btn-row">
-        <button type="button" class="btn btn-primary" onclick="speakLocal()">تشغيل النطق</button>
-        <button type="button" class="btn btn-stop" onclick="stopLocal()">إيقاف</button>
-      </div>
-
-      <div class="status" id="localStatus">جاهز للنطق المحلي</div>
+    <!-- الانتقال للمعالجة في الموقع -->
+    <div class="card">
+      <button type="button" class="btn btn-site" onclick="processOnSite()">
+        معالجة في الموقع (KikiVoice)
+      </button>
+      <div class="status" id="siteStatus">سيتم فتح الموقع السحابي لاستكمال المعالجة</div>
     </div>
   </div>
 
   <script>
-    function updateSliders() {
-      const rate = parseFloat(document.getElementById('rateRange').value).toFixed(2);
-      const pitch = parseFloat(document.getElementById('pitchRange').value).toFixed(2);
-      document.getElementById('rateVal').textContent = `${rate}x`;
-      document.getElementById('pitchVal').textContent = `${pitch}x`;
+    let refBlob = null;
+    let srcBlob = null;
+    let mediaRecorder = null;
+    let chunks = [];
+    let recordingTarget = null;
+
+    async function toggleRec(target) {
+      const btn = document.getElementById(target === 'ref' ? 'btnRecRef' : 'btnRecSrc');
+      const status = document.getElementById(target === 'ref' ? 'refStatus' : 'srcStatus');
+
+      if (!recordingTarget) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          chunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+          recordingTarget = target;
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            stream.getTracks().forEach(t => t.stop());
+            const doneTarget = recordingTarget;
+            recordingTarget = null;
+            btn.classList.remove('recording');
+            btn.textContent = doneTarget === 'ref' ? 'تسجيل عينة' : 'تسجيل صوت';
+            attachAudio(doneTarget, blob, 'تسجيل صوتي جديد');
+          };
+
+          mediaRecorder.start();
+          btn.classList.add('recording');
+          btn.textContent = 'إيقاف';
+          status.textContent = 'جاري التسجيل...';
+        } catch (err) {
+          recordingTarget = null;
+          btn.classList.remove('recording');
+          status.textContent = 'تعذر التسجيل: ' + err.message;
+        }
+      } else if (recordingTarget === target && mediaRecorder) {
+        mediaRecorder.stop();
+      }
     }
 
-    function speakLocal() {
-      const text = document.getElementById('localText').value.trim();
-      const status = document.getElementById('localStatus');
-
-      if (!text) {
-        status.textContent = 'يرجى كتابة نص أولاً.';
-        return;
-      }
-
-      if (!('speechSynthesis' in window)) {
-        status.textContent = 'محرك النطق المحلي غير متوفر على هذا الجهاز.';
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = /[\u0600-\u06FF]/.test(text) ? 'ar-SA' : 'en-US';
-      utterance.rate = parseFloat(document.getElementById('rateRange').value);
-      utterance.pitch = parseFloat(document.getElementById('pitchRange').value);
-
-      utterance.onstart = () => {
-        status.textContent = 'جاري النطق المحلي...';
-      };
-      utterance.onend = () => {
-        status.textContent = 'اكتمل النطق المحلي.';
-      };
-      utterance.onerror = (e) => {
-        status.textContent = `تعذر النطق: ${e.error || 'خطأ غير معروف'}`;
-      };
-
-      window.speechSynthesis.speak(utterance);
+    function onFilePick(event, target) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      attachAudio(target, file, file.name || 'ملف صوتي');
     }
 
-    function stopLocal() {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+    function attachAudio(target, blob, name) {
+      const isRef = target === 'ref';
+      if (isRef) refBlob = blob;
+      else srcBlob = blob;
+
+      const audio = document.getElementById(isRef ? 'refAudio' : 'srcAudio');
+      const status = document.getElementById(isRef ? 'refStatus' : 'srcStatus');
+      const saveBtn = document.getElementById(isRef ? 'btnSaveRef' : 'btnSaveSrc');
+
+      audio.src = URL.createObjectURL(blob);
+      audio.classList.remove('hidden');
+      saveBtn.classList.remove('hidden');
+      status.textContent = `تم الاختيار: ${name} (${(blob.size / 1024).toFixed(1)} KB)`;
+    }
+
+    function saveToDownloads(target) {
+      const blob = target === 'ref' ? refBlob : srcBlob;
+      if (!blob) return;
+
+      const prefix = target === 'ref' ? 'reference_voice' : 'source_voice';
+      const fileName = `${prefix}_${Date.now()}.mp3`;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (window.AndroidBridge && typeof window.AndroidBridge.saveAudioFile === 'function') {
+          window.AndroidBridge.saveAudioFile(reader.result, fileName);
+        }
+      };
+      reader.readAsDataURL(blob);
+    }
+
+    function processOnSite() {
+      if (window.AndroidBridge && typeof window.AndroidBridge.openCloudSite === 'function') {
+        window.AndroidBridge.openCloudSite();
+      } else {
+        window.location.href = 'https://kikivoice.ai/';
       }
-      document.getElementById('localStatus').textContent = 'تم الإيقاف.';
     }
   </script>
 </body>
