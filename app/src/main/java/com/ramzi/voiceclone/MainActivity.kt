@@ -4,9 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
 import android.view.View
@@ -14,6 +14,7 @@ import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -28,6 +29,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private var pendingPermissionRequest: PermissionRequest? = null
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
     private val micPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -46,6 +48,20 @@ class MainActivity : AppCompatActivity() {
                         Toast.LENGTH_SHORT
                     ).show()
                 }
+            }
+        }
+    }
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val callback = filePathCallback
+        filePathCallback = null
+        if (callback != null) {
+            if (uri != null) {
+                callback.onReceiveValue(arrayOf(uri))
+            } else {
+                callback.onReceiveValue(null)
             }
         }
     }
@@ -99,6 +115,33 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                this@MainActivity.filePathCallback?.onReceiveValue(null)
+                this@MainActivity.filePathCallback = filePathCallback
+
+                return try {
+                    val mimeType = fileChooserParams?.acceptTypes
+                        ?.firstOrNull { it.isNotBlank() }
+                        ?: "audio/*"
+                    fileChooserLauncher.launch(mimeType)
+                    true
+                } catch (e: Exception) {
+                    this@MainActivity.filePathCallback = null
+                    runOnUiThread {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "تعذر فتح مستعرض الملفات: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    false
+                }
+            }
+
             override fun onPermissionRequest(request: PermissionRequest?) {
                 if (request == null) return
                 val wantsAudio = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
@@ -206,6 +249,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        filePathCallback?.onReceiveValue(null)
+        filePathCallback = null
         webView.destroy()
         super.onDestroy()
     }
