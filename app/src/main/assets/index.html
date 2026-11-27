@@ -394,6 +394,8 @@
       btnCancel.classList.remove('hidden');
       outAudio.classList.add('hidden');
       btnSaveOut.classList.add('hidden');
+      outBlob = null;
+      window.lastOutUrl = null;
 
       const totalMB = ((refBlob.size + srcBlob.size) / (1024 * 1024)).toFixed(2);
       setCloneStatus(`جاري الاتصال بـ ${spaceId}...`, 'working');
@@ -406,16 +408,14 @@
 
         setCloneStatus(`جاري رفع الملفات (${totalMB} MB) إلى الخادم...`, 'working');
 
-        // استخدام submit لمتابعة حالة الطابور لحظة بلحظة
-        // تقليل الخطوات إلى 12 لتسريع المعالجة للضعف
         activeJob = client.submit("/predict", [
-          srcBlob,    // الصوت المراد تحويله
-          refBlob,    // العينة المرجعية
-          12,         // خطوات الجودة (12 سريعة ونقية)
-          1.0,        // سرعة الصوت
-          0.7,        // قوة تطابق النبرة
-          true,       // ضبط الطبقة تلقائياً
-          0           // إزاحة الطبقة
+          srcBlob,
+          refBlob,
+          12,
+          1.0,
+          0.7,
+          true,
+          0
         ]);
 
         for await (const msg of activeJob) {
@@ -434,14 +434,24 @@
             const outputData = msg.data[1] || msg.data[0];
 
             if (outputData && outputData.url) {
-              setCloneStatus('اكتملت المعالجة! جاري تنزيل الصوت المستنسخ...', 'working');
-              const audioResp = await fetch(outputData.url);
-              outBlob = await audioResp.blob();
-
-              outAudio.src = URL.createObjectURL(outBlob);
+              window.lastOutUrl = outputData.url;
+              
+              // تشغيل الرابط مباشرة في المشغل دون انتظار fetch لتجاوز قيود CORS
+              outAudio.src = outputData.url;
               outAudio.classList.remove('hidden');
               btnSaveOut.classList.remove('hidden');
-              setCloneStatus('تم استنساخ الصوت بنجاح!', 'success');
+              setCloneStatus('تم استنساخ الصوت بنجاح! اضغط تشغيل للاستماع.', 'success');
+
+              // محاولة جلب الملف في الخلفية لتجهيزه للحفظ المحلي
+              try {
+                const fetchHeaders = hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {};
+                const audioResp = await fetch(outputData.url, { headers: fetchHeaders });
+                if (audioResp.ok) {
+                  outBlob = await audioResp.blob();
+                }
+              } catch (e) {
+                console.warn("تم تشغيل الرابط المباشر، سيجري الحفظ عبر الرابط عند الطلب.");
+              }
             } else {
               throw new Error('لم يُرجع الخادم ملفاً صوتياً صالحاً.');
             }
@@ -451,7 +461,7 @@
       } catch (err) {
         if (!isCancelled) {
           console.error(err);
-          setCloneStatus('فشلت العملية: ' + (err.message || 'الخادم مزدحم أو انتهت الحصة المجانية، جرب لاحقاً.'), 'error');
+          setCloneStatus('فشلت العملية: ' + (err.message || 'حدث خطأ غير متوقع، حاول مرة أخرى.'), 'error');
         }
       } finally {
         resetUIState();
@@ -465,6 +475,16 @@
       if (target === 'ref') { blob = refBlob; prefix = 'reference_voice'; }
       else if (target === 'src') { blob = srcBlob; prefix = 'source_voice'; }
       else if (target === 'out') { blob = outBlob; prefix = 'cloned_voice'; }
+
+      // إذا كان الصوت المستنسخ جاهزاً كرابط مباشر ولم يُسحب كـ Blob بعد
+      if (target === 'out' && !blob && window.lastOutUrl) {
+        const a = document.createElement('a');
+        a.href = window.lastOutUrl;
+        a.download = `cloned_voice_${Date.now()}.wav`;
+        a.target = '_blank';
+        a.click();
+        return;
+      }
 
       if (!blob) return;
 
