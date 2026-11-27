@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>اختيار وتجهيز الأصوات | Voice Clone Studio</title>
+  <title>استوديو الاستنساخ الصوتي | Voice Clone Studio</title>
   <style>
     :root {
       --bg: #0b0f17;
@@ -15,6 +15,7 @@
       --text: #f1f5f9;
       --muted: #94a3b8;
       --danger: #ef4444;
+      --warning: #f59e0b;
     }
 
     * {
@@ -88,6 +89,12 @@
       color: #fff;
       background: #1e293b;
       text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .btn-record.recording {
@@ -100,11 +107,25 @@
       margin-top: 8px;
     }
 
-    .btn-site {
+    .btn-clone {
       width: 100%;
       background: var(--accent);
       padding: 14px;
       font-size: 1rem;
+      color: #06281e;
+      font-weight: 700;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+      direction: ltr;
     }
 
     audio {
@@ -116,21 +137,32 @@
     .status {
       font-size: 0.83rem;
       color: var(--muted);
-      margin-top: 6px;
+      margin-top: 8px;
       text-align: center;
       word-break: break-word;
     }
 
+    .status.error { color: var(--danger); }
+    .status.success { color: var(--accent); }
+    .status.working { color: var(--warning); }
+
     .hidden {
       display: none !important;
+    }
+
+    details summary {
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--muted);
+      user-select: none;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>اختيار وتجهيز الأصوات</h1>
-      <p>اختر أو سجّل الأصوات داخل التطبيق، ثم انتقل إلى المعالجة في الموقع</p>
+      <h1>استوديو الاستنساخ الصوتي</h1>
+      <p>سجّل أو اختر الأصوات ثم نفّذ الاستنساخ مباشرة عبر الذكاء الاصطناعي</p>
     </header>
 
     <!-- 1. العينة الصوتية المرجعية -->
@@ -146,13 +178,13 @@
       <div class="status" id="refStatus">لم يتم اختيار عينة مرجعية بعد</div>
       <audio id="refAudio" controls class="hidden"></audio>
       <button type="button" class="btn btn-save hidden" id="btnSaveRef" onclick="saveToDownloads('ref')">
-        حفظ العينة في التنزيلات للرفع في الموقع
+        حفظ العينة في التنزيلات
       </button>
     </div>
 
     <!-- 2. الصوت المراد تحويله -->
     <div class="card">
-      <span class="label">2. الصوت المراد تحويله</span>
+      <span class="label">2. الصوت المراد تحويله (إلقاؤك أو صوتك المصدر)</span>
       <div class="audio-actions">
         <button type="button" class="btn btn-record" id="btnRecSrc" onclick="toggleRec('src')">تسجيل صوت</button>
         <label class="btn" style="margin:0;">
@@ -163,25 +195,69 @@
       <div class="status" id="srcStatus">لم يتم اختيار صوت مصدر بعد</div>
       <audio id="srcAudio" controls class="hidden"></audio>
       <button type="button" class="btn btn-save hidden" id="btnSaveSrc" onclick="saveToDownloads('src')">
-        حفظ الصوت المصدر في التنزيلات للرفع في الموقع
+        حفظ الصوت المصدر في التنزيلات
       </button>
     </div>
 
-    <!-- 3. الانتقال للمعالجة في الموقع -->
+    <!-- إعدادات الخادم السحابي (اختيارية) -->
     <div class="card">
-      <button type="button" class="btn btn-site" onclick="processOnSite()">
-        معالجة في الموقع (KikiVoice)
+      <details>
+        <summary>إعدادات الخادم السحابي (Hugging Face Space & Token)</summary>
+        <div style="margin-top: 10px;">
+          <span class="label" style="font-size: 0.8rem;">اسم المساحة (Space ID):</span>
+          <input type="text" id="spaceIdInput" class="input-field" value="Plachta/Seed-VC" placeholder="Plachta/Seed-VC" />
+          
+          <span class="label" style="font-size: 0.8rem;">مفتاح الوصول (HF Token - اختياري لتسريع الطابور):</span>
+          <input type="password" id="hfTokenInput" class="input-field" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" />
+          
+          <button type="button" class="btn" style="width:100%; font-size:0.8rem;" onclick="saveSettings()">حفظ الإعدادات</button>
+        </div>
+      </details>
+    </div>
+
+    <!-- 3. تنفيذ الاستنساخ الداخلي -->
+    <div class="card">
+      <button type="button" class="btn btn-clone" id="btnClone" onclick="startVoiceCloning()">
+        بدء الاستنساخ الصوتي الآن
       </button>
-      <div class="status" id="siteStatus">سيتم فتح الموقع السحابي لاستكمال المعالجة</div>
+      <div class="status" id="cloneStatus">جاهز للمعالجة السحابية المباشرة</div>
+      
+      <audio id="outAudio" controls class="hidden"></audio>
+      <button type="button" class="btn btn-save hidden" id="btnSaveOut" onclick="saveToDownloads('out')">
+        حفظ الصوت المستنسخ في التنزيلات
+      </button>
     </div>
   </div>
+
+  <!-- استدعاء مكتبة Gradio Client -->
+  <script type="module">
+    import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/+esm";
+    window.GradioClient = Client;
+  </script>
 
   <script>
     let refBlob = null;
     let srcBlob = null;
+    let outBlob = null;
     let mediaRecorder = null;
     let chunks = [];
     let recordingTarget = null;
+
+    // تحميل الإعدادات المحفوظة عند فتح الصفحة
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedSpace = localStorage.getItem('hf_space_id');
+      const savedToken = localStorage.getItem('hf_token');
+      if (savedSpace) document.getElementById('spaceIdInput').value = savedSpace;
+      if (savedToken) document.getElementById('hfTokenInput').value = savedToken;
+    });
+
+    function saveSettings() {
+      const spaceId = document.getElementById('spaceIdInput').value.trim() || 'Plachta/Seed-VC';
+      const token = document.getElementById('hfTokenInput').value.trim();
+      localStorage.setItem('hf_space_id', spaceId);
+      localStorage.setItem('hf_token', token);
+      setCloneStatus('تم حفظ إعدادات الخادم بنجاح', 'success');
+    }
 
     async function toggleRec(target) {
       const btn = document.getElementById(target === 'ref' ? 'btnRecRef' : 'btnRecSrc');
@@ -243,27 +319,102 @@
       status.textContent = `تم الاختيار: ${name} (${(blob.size / 1024).toFixed(1)} KB)`;
     }
 
+    function setCloneStatus(msg, type = '') {
+      const el = document.getElementById('cloneStatus');
+      el.textContent = msg;
+      el.className = 'status ' + type;
+    }
+
+    async function startVoiceCloning() {
+      if (!refBlob || !srcBlob) {
+        setCloneStatus('يرجى اختيار أو تسجيل العينة المرجعية والصوت المراد تحويله أولاً.', 'error');
+        return;
+      }
+
+      if (!window.GradioClient) {
+        setCloneStatus('مكتبة الاتصال السحابي لم تكتمل، تأكد من اتصال الإنترنت وأعد المحاولة.', 'error');
+        return;
+      }
+
+      const btnClone = document.getElementById('btnClone');
+      const outAudio = document.getElementById('outAudio');
+      const btnSaveOut = document.getElementById('btnSaveOut');
+
+      const spaceId = document.getElementById('spaceIdInput').value.trim() || 'Plachta/Seed-VC';
+      const hfToken = document.getElementById('hfTokenInput').value.trim();
+
+      btnClone.disabled = true;
+      outAudio.classList.add('hidden');
+      btnSaveOut.classList.add('hidden');
+      setCloneStatus('جاري الاتصال بخادم الاستنساخ السحابي...', 'working');
+
+      try {
+        const options = hfToken ? { hf_token: hfToken } : {};
+        const client = await window.GradioClient.connect(spaceId, options);
+
+        setCloneStatus('تم الاتصال! جاري رفع العينات ومعالجة الصوت (انتظر 20-45 ثانية)...', 'working');
+
+        // إرسال الملفات لنموذج Seed-VC (المصدر أولاً ثم المرجع)
+        const result = await client.predict("/predict", [
+          srcBlob,    // الصوت المراد تحويله
+          refBlob,    // العينة المرجعية
+          25,         // عدد خطوات الجودة (Diffusion steps)
+          1.0,        // سرعة الصوت (Length adjust)
+          0.7,        // قوة تطابق النبرة
+          true,       // ضبط الطبقة تلقائياً (Auto F0)
+          0           // إزاحة الطبقة
+        ]);
+
+        const outputData = result.data[1] || result.data[0];
+
+        if (outputData && outputData.url) {
+          setCloneStatus('جاري تحميل الملف الصوتي الناتج...', 'working');
+          
+          // جلب الملف كـ Blob ليتمكن المستخدم من تشغيله وحفظه محلياً
+          const audioResp = await fetch(outputData.url);
+          outBlob = await audioResp.blob();
+
+          outAudio.src = URL.createObjectURL(outBlob);
+          outAudio.classList.remove('hidden');
+          btnSaveOut.classList.remove('hidden');
+          setCloneStatus('تم استنساخ الصوت بنجاح!', 'success');
+        } else {
+          throw new Error('لم يُرجع الخادم ملفاً صوتياً صالحاً.');
+        }
+
+      } catch (err) {
+        console.error(err);
+        setCloneStatus('فشلت العملية: ' + (err.message || 'الخادم مزدحم حالياً، حاول مرة أخرى أو أضف HF Token'), 'error');
+      } finally {
+        btnClone.disabled = false;
+      }
+    }
+
     function saveToDownloads(target) {
-      const blob = target === 'ref' ? refBlob : srcBlob;
+      let blob = null;
+      let prefix = '';
+
+      if (target === 'ref') { blob = refBlob; prefix = 'reference_voice'; }
+      else if (target === 'src') { blob = srcBlob; prefix = 'source_voice'; }
+      else if (target === 'out') { blob = outBlob; prefix = 'cloned_voice'; }
+
       if (!blob) return;
 
-      const prefix = target === 'ref' ? 'reference_voice' : 'source_voice';
-      const fileName = `${prefix}_${Date.now()}.mp3`;
+      const ext = target === 'out' ? 'wav' : 'mp3';
+      const fileName = `${prefix}_${Date.now()}.${ext}`;
       const reader = new FileReader();
       reader.onloadend = () => {
         if (window.AndroidBridge && typeof window.AndroidBridge.saveAudioFile === 'function') {
           window.AndroidBridge.saveAudioFile(reader.result, fileName);
+        } else {
+          // بديل في حال الفتح من المتصفح العادي
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = fileName;
+          a.click();
         }
       };
       reader.readAsDataURL(blob);
-    }
-
-    function processOnSite() {
-      if (window.AndroidBridge && typeof window.AndroidBridge.openCloudSite === 'function') {
-        window.AndroidBridge.openCloudSite();
-      } else {
-        window.location.href = 'https://kikivoice.ai/';
-      }
     }
   </script>
 </body>
