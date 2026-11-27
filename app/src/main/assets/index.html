@@ -136,6 +136,39 @@
       direction: ltr;
     }
 
+    .slider-group {
+      margin-bottom: 14px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+
+    .slider-val {
+      color: var(--accent);
+      font-weight: 700;
+      direction: ltr;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      margin-top: 6px;
+    }
+
     audio {
       width: 100%;
       margin-top: 8px;
@@ -177,12 +210,12 @@
   <div class="container">
     <header>
       <h1>استوديو الاستنساخ الصوتي</h1>
-      <p>سجّل أو اختر الأصوات ثم نفّذ الاستنساخ مباشرة عبر الذكاء الاصطناعي</p>
+      <p>إعدادات الجودة القصوى ومطابقة النبرة الشعرية</p>
     </header>
 
     <!-- 1. العينة الصوتية المرجعية -->
     <div class="card">
-      <span class="label">1. العينة الصوتية المرجعية (الصوت المستهدف - 10 ثوانٍ تكفي)</span>
+      <span class="label">1. العينة الصوتية المرجعية (صوت نقي بدون موسيقى أو صدى)</span>
       <div class="audio-actions">
         <button type="button" class="btn btn-record" id="btnRecRef" onclick="toggleRec('ref')">تسجيل عينة</button>
         <label class="btn" style="margin:0;">
@@ -191,7 +224,7 @@
         </label>
       </div>
       <div class="status" id="refStatus">لم يتم اختيار عينة مرجعية بعد</div>
-      <div class="tip hidden" id="refTip">تنبيه: الملف كبير، يفضل عينة قصيرة (10-15 ثانية) لتسريع الرفع.</div>
+      <div class="tip hidden" id="refTip">تنبيه: الملف كبير، يفضل عينة قصيرة (10-15 ثانية) صافية.</div>
       <audio id="refAudio" controls class="hidden"></audio>
       <button type="button" class="btn btn-save hidden" id="btnSaveRef" onclick="saveToDownloads('ref')">
         حفظ العينة في التنزيلات
@@ -216,6 +249,43 @@
       </button>
     </div>
 
+    <!-- 3. ضبط الجودة والطبقة الصوتية -->
+    <div class="card">
+      <span class="label">3. ضبط الجودة القصوى والطبقة الصوتية</span>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span>دقة المعالجة ومخارج الحروف (Steps):</span>
+          <span class="slider-val" id="stepsVal">40</span>
+        </div>
+        <input type="range" id="stepsInput" min="15" max="50" step="5" value="40"
+               oninput="document.getElementById('stepsVal').textContent = this.value" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span>قوة تقمص خامة الصوت المرجعي (CFG Rate):</span>
+          <span class="slider-val" id="cfgVal">0.85</span>
+        </div>
+        <input type="range" id="cfgInput" min="0.5" max="1.0" step="0.05" value="0.85"
+               oninput="document.getElementById('cfgVal').textContent = this.value" />
+      </div>
+
+      <div class="slider-group" style="margin-bottom: 8px;">
+        <div class="slider-header">
+          <span>تعديل حدة/عمق الصوت (Pitch Shift):</span>
+          <span class="slider-val" id="pitchVal">0</span>
+        </div>
+        <input type="range" id="pitchInput" min="-12" max="12" step="1" value="0"
+               oninput="document.getElementById('pitchVal').textContent = (this.value > 0 ? '+' + this.value : this.value)" />
+      </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="autoF0Input" checked />
+        <span>مطابقة طبقة الصوت تلقائياً مع المرجع (Auto F0 Adjust)</span>
+      </label>
+    </div>
+
     <!-- إعدادات الخادم السحابي -->
     <div class="card">
       <details>
@@ -224,7 +294,7 @@
           <span class="label" style="font-size: 0.8rem;">اسم المساحة (Space ID):</span>
           <input type="text" id="spaceIdInput" class="input-field" value="Plachta/Seed-VC" placeholder="Plachta/Seed-VC" />
           
-          <span class="label" style="font-size: 0.8rem;">مفتاح الوصول (HF Token - اختياري لتسريع الطابور):</span>
+          <span class="label" style="font-size: 0.8rem;">مفتاح الوصول (HF Token):</span>
           <input type="password" id="hfTokenInput" class="input-field" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" />
           
           <button type="button" class="btn" style="width:100%; font-size:0.8rem;" onclick="saveSettings()">حفظ الإعدادات</button>
@@ -232,10 +302,10 @@
       </details>
     </div>
 
-    <!-- 3. تنفيذ الاستنساخ الداخلي -->
+    <!-- 4. تنفيذ الاستنساخ الداخلي -->
     <div class="card">
       <button type="button" class="btn btn-clone" id="btnClone" onclick="startVoiceCloning()">
-        بدء الاستنساخ الصوتي الآن
+        بدء الاستنساخ بأقصى جودة
       </button>
       <button type="button" class="btn btn-cancel hidden" id="btnCancel" onclick="cancelCloning()">
         إلغاء المعالجة
@@ -389,6 +459,12 @@
       const spaceId = document.getElementById('spaceIdInput').value.trim() || 'Plachta/Seed-VC';
       const hfToken = document.getElementById('hfTokenInput').value.trim();
 
+      // قراءة إعدادات الجودة القصوى من واجهة المستخدم
+      const diffusionSteps = parseInt(document.getElementById('stepsInput').value, 10) || 40;
+      const cfgRate = parseFloat(document.getElementById('cfgInput').value) || 0.85;
+      const pitchShift = parseInt(document.getElementById('pitchInput').value, 10) || 0;
+      const autoF0 = document.getElementById('autoF0Input').checked;
+
       isCancelled = false;
       btnClone.disabled = true;
       btnCancel.classList.remove('hidden');
@@ -406,16 +482,16 @@
 
         if (isCancelled) return;
 
-        setCloneStatus(`جاري رفع الملفات (${totalMB} MB) إلى الخادم...`, 'working');
+        setCloneStatus(`جاري رفع الملفات (${totalMB} MB) بمعالجة ${diffusionSteps} خطوة...`, 'working');
 
         activeJob = client.submit("/predict", [
           srcBlob,
           refBlob,
-          12,
+          diffusionSteps,
           1.0,
-          0.7,
-          true,
-          0
+          cfgRate,
+          autoF0,
+          pitchShift
         ]);
 
         for await (const msg of activeJob) {
@@ -426,7 +502,7 @@
               const rank = msg.queue_position !== undefined ? ` (ترتيبك في الطابور: ${msg.queue_position + 1})` : "";
               setCloneStatus(`تم الرفع! في انتظار دورك على السيرفر${rank}...`, 'working');
             } else if (msg.stage === "generating") {
-              setCloneStatus(`بدأت المعالجة الفعلية لصوتك الآن...`, 'working');
+              setCloneStatus(`جاري المعالجة عالية الدقة (${diffusionSteps} خطوة)...`, 'working');
             } else if (msg.stage === "error") {
               throw new Error(msg.message || "خطأ من الخادم أثناء المعالجة.");
             }
@@ -435,14 +511,11 @@
 
             if (outputData && outputData.url) {
               window.lastOutUrl = outputData.url;
-              
-              // تشغيل الرابط مباشرة في المشغل دون انتظار fetch لتجاوز قيود CORS
               outAudio.src = outputData.url;
               outAudio.classList.remove('hidden');
               btnSaveOut.classList.remove('hidden');
-              setCloneStatus('تم استنساخ الصوت بنجاح! اضغط تشغيل للاستماع.', 'success');
+              setCloneStatus('تم استنساخ الصوت بنجاح بأعلى جودة! اضغط تشغيل للاستماع.', 'success');
 
-              // محاولة جلب الملف في الخلفية لتجهيزه للحفظ المحلي
               try {
                 const fetchHeaders = hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {};
                 const audioResp = await fetch(outputData.url, { headers: fetchHeaders });
@@ -450,7 +523,7 @@
                   outBlob = await audioResp.blob();
                 }
               } catch (e) {
-                console.warn("تم تشغيل الرابط المباشر، سيجري الحفظ عبر الرابط عند الطلب.");
+                console.warn("تم تشغيل الرابط المباشر.");
               }
             } else {
               throw new Error('لم يُرجع الخادم ملفاً صوتياً صالحاً.');
@@ -476,7 +549,6 @@
       else if (target === 'src') { blob = srcBlob; prefix = 'source_voice'; }
       else if (target === 'out') { blob = outBlob; prefix = 'cloned_voice'; }
 
-      // إذا كان الصوت المستنسخ جاهزاً كرابط مباشر ولم يُسحب كـ Blob بعد
       if (target === 'out' && !blob && window.lastOutUrl) {
         const a = document.createElement('a');
         a.href = window.lastOutUrl;
